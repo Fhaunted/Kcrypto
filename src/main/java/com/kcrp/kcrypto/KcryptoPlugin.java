@@ -90,17 +90,25 @@ public final class KcryptoPlugin extends JavaPlugin {
         // 6. Load machines from DB (async, then schedule their tickers)
         getServer().getAsyncScheduler().runNow(this, task -> machineManager.loadAllMachines());
 
-        // 7. Schedule the 24-hour economy rate update task
-        // Initial run after 10 s to let the DB settle, then every 24 h
+        // 7. Schedule the economy rate update task
+        // Run once 10 seconds after boot to ensure a valid rate on restart
         getServer().getAsyncScheduler().runDelayed(this,
                 task -> new RateTask(this, databaseManager, economyManager,
                         laundererManager, machineManager, configManager).run(),
                 10, TimeUnit.SECONDS);
 
+        // Run exactly at 20:00 server time every day
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.systemDefault());
+        java.time.ZonedDateTime nextRun = now.withHour(20).withMinute(0).withSecond(0).withNano(0);
+        if (now.compareTo(nextRun) >= 0) {
+            nextRun = nextRun.plusDays(1);
+        }
+        long initialDelayMillis = java.time.Duration.between(now, nextRun).toMillis();
+
         getServer().getAsyncScheduler().runAtFixedRate(this,
                 task -> new RateTask(this, databaseManager, economyManager,
                         laundererManager, machineManager, configManager).run(),
-                24, 24, TimeUnit.HOURS);
+                initialDelayMillis, TimeUnit.DAYS.toMillis(1), TimeUnit.MILLISECONDS);
 
         getLogger().info("KKopia v" + getDescription().getVersion() + " enabled successfully.");
     }

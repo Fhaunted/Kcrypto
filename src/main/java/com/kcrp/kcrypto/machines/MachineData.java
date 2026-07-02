@@ -183,6 +183,35 @@ public final class MachineData {
         skipCounter.set(skipBase);
     }
 
+    // ── Rarity Skips ────────────────────────────────────────────────────────
+
+    private int raritySkipCounter = 0;
+
+    public int decrementAndGetRaritySkip() {
+        if (raritySkipCounter > 0) {
+            raritySkipCounter--;
+            return raritySkipCounter;
+        }
+        return 0;
+    }
+
+    public void setRaritySkip(int skips) {
+        this.raritySkipCounter = Math.max(0, skips);
+    }
+
+    /**
+     * Peeks at the first available ore without consuming it.
+     */
+    public ItemStack peekFirstOre() {
+        for (int i = 0; i < oreSlots.length; i++) {
+            ItemStack slot = oreSlots[i];
+            if (slot != null && slot.getAmount() > 0) {
+                return slot;
+            }
+        }
+        return null;
+    }
+
     // ────────────────────────────────────────────────────────────────────────
     //  Location key helper
     // ────────────────────────────────────────────────────────────────────────

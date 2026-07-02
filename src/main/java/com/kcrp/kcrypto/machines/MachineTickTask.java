@@ -112,6 +112,11 @@ public final class MachineTickTask implements Runnable {
         }
         data.resetSkip(); // reset for next cycle
 
+        // ── 1.5 Rarity skip (takes longer to process rare ores) ───────────
+        if (data.decrementAndGetRaritySkip() > 0) {
+            return; // still busy mining a rare ore
+        }
+
         // ── 1. Overload check ──────────────────────────────────────────────
         if (data.isInOverload()) {
             return; // still cooling down
@@ -144,6 +149,10 @@ public final class MachineTickTask implements Runnable {
 
         double yield = EconomyManager.getOreYield(ore.getType());
         double heat  = EconomyManager.getOreHeat(ore.getType());
+        
+        // The rarer the ore, the more ticks it takes to mine
+        int extraSkips = (int) Math.floor(yield * cfg.getRaritySkipMultiplier());
+        data.setRaritySkip(extraSkips);
 
         // ── 4. Credit K-Crypto asynchronously ────────────────────────────
         UUID  owner      = data.getOwnerUuid();

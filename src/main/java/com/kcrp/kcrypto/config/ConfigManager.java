@@ -36,6 +36,7 @@ public final class ConfigManager {
     private volatile long    tickIntervalSeconds;
     private volatile long    overloadCooldownSeconds;
     private volatile double  passiveCoolingRate;
+    private volatile int     raritySkipMultiplier;
 
     // Messages
     private volatile String prefix;
@@ -77,10 +78,11 @@ public final class ConfigManager {
         tickIntervalSeconds     = cfg.getLong("machine.tick-interval-seconds",    30L);
         overloadCooldownSeconds = cfg.getLong("machine.overload-cooldown-seconds", 1800L);
         passiveCoolingRate      = cfg.getDouble("machine.passive-cooling-rate",   2.0);
+        raritySkipMultiplier    = cfg.getInt("machine.rarity-skip-multiplier",    4);
 
-        prefix              = color(cfg.getString("messages.prefix",           "\u00268[\u00266KKopia\u00268] \u0026r"));
-        msgNoPermission     = color(cfg.getString("messages.no-permission",    "\u0026cVous n'avez pas la permission."));
-        msgLaundererDenied  = color(cfg.getString("messages.launderer-denied", "\u00267Cet individu ne souhaite pas vous parler."));
+        prefix              = color(cfg.getString("messages.prefix",           "&8[&6KKopia&8] &r"));
+        msgNoPermission     = color(cfg.getString("messages.no-permission",    "&cVous n'avez pas la permission."));
+        msgLaundererDenied  = color(cfg.getString("messages.launderer-denied", "&7Cet individu ne souhaite pas vous parler."));
     }
 
     // ── Database ────────────────────────────────────────────────────────────
@@ -109,6 +111,7 @@ public final class ConfigManager {
     public long   getOverloadCooldownSeconds() { return overloadCooldownSeconds; }
     /** Heat points reduced per tick when the machine has no ores. Default 2.0. */
     public double getPassiveCoolingRate()       { return passiveCoolingRate;      }
+    public int    getRaritySkipMultiplier()     { return raritySkipMultiplier;    }
 
     // ── Messages ────────────────────────────────────────────────────────────
 

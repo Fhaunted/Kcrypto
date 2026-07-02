@@ -36,6 +36,10 @@ machine:
   overload-cooldown-seconds: 1800
   # Heat points reduced per tick when the machine has no ores (passive cooling)
   passive-cooling-rate: 2.0
+  # Rarity skip multiplier: determines how many extra ticks a rare ore takes to mine.
+  # Formula: skips = yield * multiplier
+  # Example with multiplier 4: Diamond (yield 2.5) takes 10 extra ticks to mine. Coal (yield 0.05) takes 0 extra ticks.
+  rarity-skip-multiplier: 4
 
 messages:
   prefix: "&8[&6KKopia&8] &r"
