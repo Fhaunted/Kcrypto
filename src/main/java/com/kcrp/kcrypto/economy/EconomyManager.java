@@ -9,8 +9,22 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 
 /**
- * EconomyManager – maintains the live K-Crypto ↔ KCoin rate
+ * EconomyManager – maintains the live K-Crypto ↔ KCoin conversion rate
  * and exposes helper methods for balance operations.
+ *
+ * <h3>Anti-Inflation Rate Formula (Krach Automatique)</h3>
+ * <pre>
+ *   C    = total K-Crypto in circulation (SUM of all wallet balances)
+ *
+ *   Rate = 100.0 / (1.0 + C × 0.0018)
+ * </pre>
+ *
+ * <p>Key reference points:
+ * <ul>
+ *   <li>C = 0    → Rate = 100 KCoins per K-Crypto (bootstrap value)</li>
+ *   <li>C = 1000 → Rate ≈ 35.7 KCoins per K-Crypto</li>
+ *   <li>C = 5000 → Rate = 10  KCoins per K-Crypto (guaranteed krach floor)</li>
+ * </ul>
  *
  * <p>The rate is stored in an {@link AtomicReference} so async and
  * region-thread code can both read it safely without locks.</p>
@@ -43,6 +57,42 @@ public final class EconomyManager {
     /** Returns the current rate: how many KCoins equals 1 K-Crypto. */
     public double getRate() {
         return currentRate.get();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    //  Anti-Inflation Formula
+    // ────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Computes the K-Crypto → KCoin rate from total circulation.
+     *
+     * <h3>Formula</h3>
+     * <pre>
+     *   Rate = 100.0 / (1.0 + C × 0.0018)
+     * </pre>
+     *
+     * <p>Calibration:
+     * <ul>
+     *   <li>C =    0 → Rate = 100.0 (no crypto; maximum value)</li>
+     *   <li>C = 5000 → Rate =  10.0 (krach trigger; automatic floor)</li>
+     * </ul>
+     *
+     * <p>The constant {@code 0.0018} is derived as follows:
+     * <pre>
+     *   10 = 100 / (1 + 5000 × k)  ⇒  k = (100/10 - 1) / 5000 = 0.0018
+     * </pre>
+     *
+     * @param totalCirculation total K-Crypto in circulation (C, must be ≥ 0)
+     * @param rateFloor        minimum allowable rate (anti-zero guard)
+     * @return new rate in KCoins per K-Crypto
+     */
+    public static double computeRate(double totalCirculation, double rateFloor) {
+        // Anti-inflation hyperbolic decay:
+        //   Rate = 100.0 / (1.0 + C × 0.0018)
+        // At C=0    : Rate = 100.0 (bootstrap)
+        // At C=5000 : Rate =  10.0 ("krach automatique")
+        double rate = 100.0 / (1.0 + totalCirculation * 0.0018);
+        return Math.max(rateFloor, rate);
     }
 
     // ────────────────────────────────────────────────────────────────────────

@@ -94,12 +94,12 @@ public final class KcryptoPlugin extends JavaPlugin {
         // Initial run after 10 s to let the DB settle, then every 24 h
         getServer().getAsyncScheduler().runDelayed(this,
                 task -> new RateTask(this, databaseManager, economyManager,
-                        laundererManager, configManager).run(),
+                        laundererManager, machineManager, configManager).run(),
                 10, TimeUnit.SECONDS);
 
         getServer().getAsyncScheduler().runAtFixedRate(this,
                 task -> new RateTask(this, databaseManager, economyManager,
-                        laundererManager, configManager).run(),
+                        laundererManager, machineManager, configManager).run(),
                 24, 24, TimeUnit.HOURS);
 
         getLogger().info("KKopia v" + getDescription().getVersion() + " enabled successfully.");

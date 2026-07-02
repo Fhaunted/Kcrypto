@@ -5,6 +5,7 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -50,6 +51,22 @@ public final class MachineData {
 
     /** Reference to the active Folia ticking task, so it can be cancelled. */
     private final AtomicReference<Object> tickTaskRef = new AtomicReference<>(null);
+
+    /**
+     * Skip counter for dynamic mining difficulty.
+     *
+     * <p>Set by {@link MachineTickTask#refreshDifficulty} based on the formula:
+     * <pre>
+     *   TimeMultiplier = 1.0 + (C / 1000.0)
+     *   skips = floor(C / 1000)   (how many extra ticks to skip per cycle)
+     * </pre>
+     *
+     * <p>Written from async thread (MachineManager rate refresh) and read from
+     * region thread (tick task). AtomicInteger provides the necessary visibility.
+     */
+    private final AtomicInteger skipCounter = new AtomicInteger(0);
+    /** Base skip value for the current difficulty level (used to reset after each cycle). */
+    private volatile int skipBase = 0;
 
     /** Number of virtual GUI slots reserved for ore insertion. */
     public static final int ORE_SLOT_COUNT = 27;
@@ -134,6 +151,36 @@ public final class MachineData {
     /** Retrieves the stored Folia task object. */
     public Object getTickTask() {
         return tickTaskRef.get();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    //  Dynamic difficulty skip counter
+    // ────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Sets the difficulty skip base. Called from async context by MachineManager.
+     * @param skips number of extra ticks to skip per ore processing cycle (≥ 0)
+     */
+    public void setSkipBase(int skips) {
+        this.skipBase = Math.max(0, skips);
+        this.skipCounter.set(Math.max(0, skips));
+    }
+
+    /**
+     * Decrements the skip counter and returns the new value.
+     * Called from region thread in MachineTickTask.run().
+     * @return current counter value after decrement
+     */
+    public int decrementAndGetSkip() {
+        return skipCounter.decrementAndGet();
+    }
+
+    /**
+     * Resets the skip counter to its base value after a full processing cycle.
+     * Called from region thread in MachineTickTask.run().
+     */
+    public void resetSkip() {
+        skipCounter.set(skipBase);
     }
 
     // ────────────────────────────────────────────────────────────────────────

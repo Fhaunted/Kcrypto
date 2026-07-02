@@ -3,6 +3,7 @@ package com.kcrp.kcrypto.economy;
 import com.kcrp.kcrypto.KcryptoPlugin;
 import com.kcrp.kcrypto.config.ConfigManager;
 import com.kcrp.kcrypto.database.DatabaseManager;
+import com.kcrp.kcrypto.machines.MachineManager;
 import com.kcrp.kcrypto.villager.LaundererManager;
 
 import java.util.logging.Logger;
@@ -10,25 +11,31 @@ import java.util.logging.Logger;
 /**
  * RateTask – executed every 24 hours on Folia's AsyncScheduler.
  *
- * <h3>Rate Formula</h3>
+ * <h3>Anti-Inflation Rate Formula (Krach Automatique)</h3>
  * <pre>
- *   totalCirculation = SUM(balance) from kconomy_wallets AND kconomy_accounts
+ *   C    = SUM(crypto_balance) from kkopia_wallets   [total K-Crypto in circulation]
  *
- *   volatilityFactor = log10(1 + totalCirculation / 1_000_000)
- *                    clipped to [0, 4]
- *
- *   rate = baseRate * (1 + volatilityFactor)
+ *   Rate = 100.0 / (1.0 + C × 0.0018)
  * </pre>
  *
- * <p>This means:
+ * <p>Key reference points:
  * <ul>
- *   <li>At low circulation: rate ≈ baseRate (e.g. 100 KCoins)</li>
- *   <li>At 1 M KCoins in circulation: rate ≈ 200</li>
- *   <li>At 100 M KCoins in circulation: rate ≈ 500</li>
+ *   <li>C =    0 → Rate = 100.0 KCoins per K-Crypto (bootstrap; no crypto mined yet)</li>
+ *   <li>C = 1000 → Rate ≈  35.7 KCoins per K-Crypto</li>
+ *   <li>C = 5000 → Rate =  10.0 KCoins per K-Crypto ("krach automatique" floor)</li>
  * </ul>
  *
- * <p>The multiplier is logarithmic, so it grows with the economy but
- * never explodes, giving a realistic inflation-hedge behaviour.</p>
+ * <h3>Dynamic Mining Difficulty</h3>
+ * <pre>
+ *   TimeMultiplier = 1.0 + (C / 1000.0)
+ * </pre>
+ * After updating the rate, this task also pushes the new difficulty multiplier
+ * to all active machines via {@link MachineManager#refreshAllDifficulty}.
+ *
+ * <p>The constant 0.0018 is derived from:
+ * <pre>
+ *   10 = 100 / (1 + 5000 × k)  ⟹  k = (100/10 − 1) / 5000 = 0.0018
+ * </pre>
  */
 public final class RateTask implements Runnable {
 
@@ -36,36 +43,41 @@ public final class RateTask implements Runnable {
     private final DatabaseManager   db;
     private final EconomyManager    economy;
     private final LaundererManager  launderer;
+    private final MachineManager    machineManager;
     private final ConfigManager     cfg;
 
     public RateTask(KcryptoPlugin plugin, DatabaseManager db,
                     EconomyManager economy, LaundererManager launderer,
-                    ConfigManager cfg) {
-        this.plugin    = plugin;
-        this.db        = db;
-        this.economy   = economy;
-        this.launderer = launderer;
-        this.cfg       = cfg;
+                    MachineManager machineManager, ConfigManager cfg) {
+        this.plugin         = plugin;
+        this.db             = db;
+        this.economy        = economy;
+        this.launderer      = launderer;
+        this.machineManager = machineManager;
+        this.cfg            = cfg;
     }
 
     @Override
     public void run() {
         Logger log = plugin.getLogger();
         try {
-            double totalCirculation = db.getTotalKCoinsInCirculation();
+            // ── 1. Query total K-Crypto in circulation (C) ──────────────────
+            double totalCirculation = db.getTotalKCryptoInCirculation();
 
-            // Log(10) of the circulation in millions, clamped to [0, 4]
-            double volatilityFactor = Math.log10(1.0 + totalCirculation / 1_000_000.0);
-            volatilityFactor = Math.max(0.0, Math.min(4.0, volatilityFactor));
-
-            // Apply base rate and volatility multiplier
-            double newRate = cfg.getBaseRate() * (1.0 + volatilityFactor);
-            newRate = Math.max(cfg.getRateFloor(), newRate);
-
+            // ── 2. Anti-inflation rate formula ──────────────────────────────
+            //   Rate = 100.0 / (1.0 + C × 0.0018)
+            //   C=0    → 100 KCoins  |  C=5000 → 10 KCoins
+            double newRate = EconomyManager.computeRate(totalCirculation, cfg.getRateFloor());
             economy.setRate(newRate);
+
+            // ── 3. Dynamic mining difficulty ─────────────────────────────────
+            //   TimeMultiplier = 1.0 + (C / 1000.0)
+            //   C=0    → ×1  |  C=1000 → ×2  |  C=5000 → ×6
+            machineManager.refreshAllDifficulty(totalCirculation);
+
             log.info(String.format(
-                    "[KKopia Economy] 24h rate update: totalCirculation=%.2f | rate=%.4f KCoins per K-Crypto",
-                    totalCirculation, newRate));
+                    "[KKopia Economy] 24h update: C=%.4f | rate=%.4f KCoins/K-Crypto | miningMult=×%.2f",
+                    totalCirculation, newRate, 1.0 + totalCirculation / 1000.0));
 
         } catch (Exception e) {
             log.severe("[KKopia Economy] Rate update task failed: " + e.getMessage());

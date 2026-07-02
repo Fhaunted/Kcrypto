@@ -46,6 +46,9 @@ public final class MachineManager {
     /** Map<locationKey, MachineData> */
     private final Map<String, MachineData> machines = new ConcurrentHashMap<>();
 
+    /** Map<locationKey, MachineTickTask> — kept so difficulty can be refreshed. */
+    private final Map<String, MachineTickTask> tickTasks = new ConcurrentHashMap<>();
+
     public MachineManager(KcryptoPlugin plugin, DatabaseManager db,
                           EconomyManager economy, ConfigManager cfg) {
         this.plugin  = plugin;
@@ -378,6 +381,10 @@ public final class MachineManager {
     /**
      * Schedules the RegionScheduler tick task for a machine.
      * RegionScheduler guarantees execution on the chunk-owning thread.
+     *
+     * <p>A single {@link MachineTickTask} instance is created per machine and
+     * reused across all tick invocations so that {@link #refreshAllDifficulty}
+     * can update the skip counter without rescheduling the Folia task.</p>
      */
     private void scheduleTickTask(MachineData data) {
         Location loc = data.getLocation();
@@ -385,14 +392,36 @@ public final class MachineManager {
 
         long periodTicks = cfg.getTickIntervalSeconds() * 20L; // seconds → ticks
 
+        // Create one reusable runner per machine
+        MachineTickTask runner = new MachineTickTask(plugin, data, db, economy, cfg);
+        tickTasks.put(data.getLocationKey(), runner);
+
         var task = plugin.getServer().getRegionScheduler()
-                .runAtFixedRate(plugin, loc, tickTask -> {
-                    MachineTickTask runner = new MachineTickTask(
-                            plugin, data, db, economy, cfg);
-                    runner.run();
-                }, periodTicks, periodTicks);
+                .runAtFixedRate(plugin, loc, tickTask -> runner.run(), periodTicks, periodTicks);
 
         data.setTickTask(task);
+    }
+
+    /**
+     * Updates the dynamic mining difficulty on all active machines.
+     * Must be called asynchronously (after a rate/circulation refresh).
+     *
+     * <h3>Formula applied</h3>
+     * <pre>
+     *   TimeMultiplier = 1.0 + (C / 1000.0)
+     *   extra skips    = floor(C / 1000)
+     * </pre>
+     *
+     * @param totalKCryptoCirculation total K-Crypto currently in circulation (C)
+     */
+    public void refreshAllDifficulty(double totalKCryptoCirculation) {
+        int skips = (int) Math.floor(totalKCryptoCirculation / 1000.0);
+        for (MachineData data : machines.values()) {
+            data.setSkipBase(skips);
+        }
+        plugin.getLogger().info(String.format(
+                "[KKopia] Mining difficulty updated: C=%.2f | TimeMultiplier=%.2f | skips=%d",
+                totalKCryptoCirculation, 1.0 + totalKCryptoCirculation / 1000.0, skips));
     }
 
     private void cancelTask(MachineData data) {

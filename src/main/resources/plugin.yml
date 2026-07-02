@@ -10,20 +10,23 @@ authors: [KCRP]
 commands:
   kcrypto:
     description: Admin commands for Kcrypto.
-    usage: /kcrypto <add|remove|admin>
-    permission: kcrypto.admin
+    usage: /kcrypto <add|remove|admin|track>
+    permission: kcrypto.admin.all
   crypto:
     description: Player commands for Kcrypto.
     usage: /crypto <wallet|pay|withdraw>
     permission: kcrypto.member
 
 permissions:
-  kcrypto.admin:
-    description: Full administrative access.
-    default: op
   kcrypto.member:
-    description: Basic member access (wallet, miner).
+    description: Accès joueur de base (wallet, pay).
     default: true
-  Kcrypto.blanchisseur:
-    description: Access to the Launderer NPC and /kcrypto withdraw.
+  kcrypto.owner:
+    description: Accès aux commandes de gestion de machine (whitelist/blacklist).
     default: false
+  kcrypto.blanchisseur:
+    description: Accès au PNJ Blanchisseur et à /crypto withdraw.
+    default: false
+  kcrypto.admin.all:
+    description: Accès administratif complet (add, remove, admin, track).
+    default: op

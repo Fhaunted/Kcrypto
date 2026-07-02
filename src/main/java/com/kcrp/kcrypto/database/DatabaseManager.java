@@ -7,7 +7,9 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -259,6 +261,59 @@ public final class DatabaseManager {
                     "Failed to query total KCoins – rate calculation will use last known value.", e);
         }
         return 0.0;
+    }
+
+    /**
+     * Returns the total sum of K-Crypto held across ALL player wallets.
+     *
+     * <p>Used by the anti-inflation rate formula:
+     * {@code Rate = 100.0 / (1.0 + C * 0.0018)}
+     * where C is the value returned by this method.</p>
+     *
+     * <p><b>Thread contract:</b> async only.</p>
+     *
+     * @return total K-Crypto in circulation (≥ 0.0)
+     */
+    public double getTotalKCryptoInCirculation() {
+        String sql = "SELECT COALESCE(SUM(`crypto_balance`), 0) AS total FROM `" + TABLE_WALLETS + "`";
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) return rs.getDouble("total");
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING,
+                    "getTotalKCryptoInCirculation failed – using 0 as fallback.", e);
+        }
+        return 0.0;
+    }
+
+    /**
+     * Returns all wallets that hold at least {@code minBalance} K-Crypto.
+     * Result is a map of {@code UUID → crypto_balance}, ordered by descending balance.
+     *
+     * <p>Used by {@code /kcrypto track} to build the player-skull GUI.
+     * <b>Thread contract:</b> async only.</p>
+     *
+     * @param minBalance minimum balance threshold (use 0.0 to include everyone)
+     * @return ordered map of UUID → balance
+     */
+    public Map<UUID, Double> getAllWallets(double minBalance) {
+        String sql = "SELECT `uuid`, `crypto_balance` FROM `" + TABLE_WALLETS
+                + "` WHERE `crypto_balance` > ? ORDER BY `crypto_balance` DESC";
+        Map<UUID, Double> result = new LinkedHashMap<>();
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setDouble(1, minBalance);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.put(UUID.fromString(rs.getString("uuid")),
+                               rs.getDouble("crypto_balance"));
+                }
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "getAllWallets failed!", e);
+        }
+        return result;
     }
 
     /**

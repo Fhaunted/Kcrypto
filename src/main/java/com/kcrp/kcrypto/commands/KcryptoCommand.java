@@ -80,6 +80,7 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
                 case "admin"    -> handleAdmin(sender, args);
                 case "add"      -> handleAddRemove(sender, args, true);
                 case "remove"   -> handleAddRemove(sender, args, false);
+                case "track"    -> handleTrack(sender);
                 default         -> { sendHelp(sender, cmdName); yield true; }
             };
         }
@@ -186,7 +187,7 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(cfg.fmt("§cCette commande est réservée aux joueurs."));
             return true;
         }
-        if (!player.hasPermission("Kcrypto.blanchisseur")) {
+        if (!player.hasPermission("kcrypto.blanchisseur")) {
             player.sendMessage(cfg.getMsgNoPermission());
             return true;
         }
@@ -223,7 +224,7 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
     // ────────────────────────────────────────────────────────────────────────
 
     private boolean handleAddRemove(CommandSender sender, String[] args, boolean add) {
-        if (!sender.hasPermission("kcrypto.admin")) {
+        if (!sender.hasPermission("kcrypto.admin.all")) {
             sender.sendMessage(cfg.getMsgNoPermission());
             return true;
         }
@@ -265,16 +266,25 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
     // ────────────────────────────────────────────────────────────────────────
 
     private boolean handleAdmin(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("kcrypto.admin")) {
-            sender.sendMessage(cfg.getMsgNoPermission());
-            return true;
-        }
         if (args.length < 2) {
             sendAdminHelp(sender);
             return true;
         }
 
-        return switch (args[1].toLowerCase()) {
+        String sub = args[1].toLowerCase();
+        if (sub.equals("whitelist") || sub.equals("blacklist")) {
+            if (!sender.hasPermission("kcrypto.owner") && !sender.hasPermission("kcrypto.admin.all")) {
+                sender.sendMessage(cfg.getMsgNoPermission());
+                return true;
+            }
+        } else {
+            if (!sender.hasPermission("kcrypto.admin.all")) {
+                sender.sendMessage(cfg.getMsgNoPermission());
+                return true;
+            }
+        }
+
+        return switch (sub) {
             case "rate", "refresh" -> handleAdminRate(sender);
             case "resetheat"  -> handleAdminResetHeat(sender);
             case "spawnnpc"   -> handleAdminSpawnNpc(sender);
@@ -289,7 +299,7 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
     private boolean handleAdminRate(CommandSender sender) {
         sender.sendMessage(cfg.fmt("§eForçage de la mise à jour du taux..."));
         plugin.getServer().getAsyncScheduler().runNow(plugin,
-                t -> new RateTask(plugin, db, economyManager, launderer, cfg).run());
+                t -> new RateTask(plugin, db, economyManager, launderer, machineManager, cfg).run());
         sender.sendMessage(cfg.fmt("§aTaux mis à jour! Consultez la console pour le résultat."));
         return true;
     }
@@ -372,6 +382,56 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
     }
 
     // ────────────────────────────────────────────────────────────────────────
+    //  /kcrypto track
+    // ────────────────────────────────────────────────────────────────────────
+
+    private boolean handleTrack(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(cfg.fmt("§cCette commande est réservée aux joueurs."));
+            return true;
+        }
+        if (!player.hasPermission("kcrypto.admin.all")) {
+            player.sendMessage(cfg.getMsgNoPermission());
+            return true;
+        }
+
+        player.sendMessage(cfg.fmt("§eChargement des données du marché..."));
+
+        plugin.getServer().getAsyncScheduler().runNow(plugin, t -> {
+            var wallets = db.getAllWallets(0.0);
+            
+            plugin.getServer().getGlobalRegionScheduler().execute(plugin, () -> {
+                int size = Math.min(54, ((wallets.size() - 1) / 9 + 1) * 9);
+                if (size < 9) size = 9;
+                
+                org.bukkit.inventory.Inventory inv = plugin.getServer().createInventory(null, size, "§8[§6K-Crypto Track§8]");
+                
+                int slot = 0;
+                for (var entry : wallets.entrySet()) {
+                    if (slot >= 54) break; // GUI max size for now
+                    org.bukkit.OfflinePlayer op = plugin.getServer().getOfflinePlayer(entry.getKey());
+                    org.bukkit.inventory.ItemStack skull = new org.bukkit.inventory.ItemStack(org.bukkit.Material.PLAYER_HEAD);
+                    org.bukkit.inventory.meta.SkullMeta meta = (org.bukkit.inventory.meta.SkullMeta) skull.getItemMeta();
+                    
+                    if (meta != null) {
+                        meta.setOwningPlayer(op);
+                        meta.setDisplayName("§e" + (op.getName() != null ? op.getName() : entry.getKey().toString()));
+                        meta.setLore(java.util.List.of(
+                                "§7Solde K-Crypto: §6" + String.format("%.4f", entry.getValue())
+                        ));
+                        skull.setItemMeta(meta);
+                    }
+                    inv.setItem(slot++, skull);
+                }
+                
+                player.openInventory(inv);
+            });
+        });
+        
+        return true;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
     //  Tab completion
     // ────────────────────────────────────────────────────────────────────────
 
@@ -387,19 +447,25 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
                     completions.add("wallet");
                     completions.add("pay");
                 }
-                if (sender.hasPermission("Kcrypto.blanchisseur")) {
+                if (sender.hasPermission("kcrypto.blanchisseur")) {
                     completions.add("withdraw");
                 }
             } else if (cmdName.equals("kcrypto")) {
-                if (sender.hasPermission("kcrypto.admin")) {
+                if (sender.hasPermission("kcrypto.admin.all")) {
                     completions.add("add");
                     completions.add("remove");
                     completions.add("admin");
+                    completions.add("track");
+                } else if (sender.hasPermission("kcrypto.owner")) {
+                    completions.add("admin");
                 }
             }
-        } else if (args.length == 2 && cmdName.equals("kcrypto") && args[0].equalsIgnoreCase("admin")
-                && sender.hasPermission("kcrypto.admin")) {
-            completions.addAll(List.of("rate", "refresh", "resetheat", "spawnnpc", "removenpc", "giveminer", "whitelist", "blacklist"));
+        } else if (args.length == 2 && cmdName.equals("kcrypto") && args[0].equalsIgnoreCase("admin")) {
+            if (sender.hasPermission("kcrypto.admin.all")) {
+                completions.addAll(List.of("rate", "refresh", "resetheat", "spawnnpc", "removenpc", "giveminer", "whitelist", "blacklist"));
+            } else if (sender.hasPermission("kcrypto.owner")) {
+                completions.addAll(List.of("whitelist", "blacklist"));
+            }
         }
         // Filter by what the player has typed so far
         String partial = args[args.length - 1].toLowerCase();
@@ -418,25 +484,32 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("  §6/crypto wallet §7- Voir votre solde K-Crypto");
                 sender.sendMessage("  §6/crypto pay <joueur> <m> §7- Payer un joueur sans taxe");
             }
-            if (sender.hasPermission("Kcrypto.blanchisseur"))
+            if (sender.hasPermission("kcrypto.blanchisseur"))
                 sender.sendMessage("  §6/crypto withdraw §7- Retirer votre pool de taxes");
         } else if (cmdName.equals("kcrypto")) {
-            if (sender.hasPermission("kcrypto.admin")) {
+            if (sender.hasPermission("kcrypto.admin.all")) {
                 sender.sendMessage("  §6/kcrypto add <joueur> <m> §7- Ajouter de la K-Crypto");
                 sender.sendMessage("  §6/kcrypto remove <joueur> <m> §7- Retirer de la K-Crypto");
+                sender.sendMessage("  §6/kcrypto track §7- Afficher les portefeuilles (GUI)");
                 sender.sendMessage("  §6/kcrypto admin §7- Commandes administratives");
+            } else if (sender.hasPermission("kcrypto.owner")) {
+                sender.sendMessage("  §6/kcrypto admin §7- Commandes de gestion de machine");
             }
         }
     }
 
     private void sendAdminHelp(CommandSender sender) {
         sender.sendMessage("§e/kcrypto admin <sous-commande>:");
-        sender.sendMessage("  §6rate/refresh §7- Force une mise à jour du taux");
-        sender.sendMessage("  §6resetheat §7- Reset la chaleur de la machine sous vous");
-        sender.sendMessage("  §6spawnnpc §7- Invoque un Blanchisseur à votre position");
-        sender.sendMessage("  §6removenpc §7- Supprime le Blanchisseur que vous visez");
-        sender.sendMessage("  §6giveminer <joueur> §7- Donne un K-Miner au joueur");
-        sender.sendMessage("  §6whitelist <joueur> §7- Ajoute à la whitelist");
-        sender.sendMessage("  §6blacklist <joueur> §7- Retire de la whitelist");
+        if (sender.hasPermission("kcrypto.admin.all")) {
+            sender.sendMessage("  §6rate/refresh §7- Force une mise à jour du taux");
+            sender.sendMessage("  §6resetheat §7- Reset la chaleur de la machine sous vous");
+            sender.sendMessage("  §6spawnnpc §7- Invoque un Blanchisseur à votre position");
+            sender.sendMessage("  §6removenpc §7- Supprime le Blanchisseur que vous visez");
+            sender.sendMessage("  §6giveminer <joueur> §7- Donne un K-Miner au joueur");
+        }
+        if (sender.hasPermission("kcrypto.admin.all") || sender.hasPermission("kcrypto.owner")) {
+            sender.sendMessage("  §6whitelist <joueur> §7- Ajoute à la whitelist");
+            sender.sendMessage("  §6blacklist <joueur> §7- Retire de la whitelist");
+        }
     }
 }
