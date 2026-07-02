@@ -124,8 +124,17 @@ public final class MachineTickTask implements Runnable {
             persistHeatAsync();
         }
 
-        // ── 2. No ores? Nothing to do ──────────────────────────────────────
+        // ── 2. No ores? Passive cooling ──────────────────────────────────────
         if (!data.hasOres()) {
+            double currentHeat = data.getHeat();
+            if (currentHeat > 0) {
+                // Machine cools down passively when idle
+                double coolingRate = cfg.getPassiveCoolingRate();
+                data.setHeat(Math.max(0.0, currentHeat - coolingRate));
+                persistHeatAsync();
+                // Update GUI views to show cooling
+                plugin.getMachineManager().updateSessionsFor(data);
+            }
             return;
         }
 

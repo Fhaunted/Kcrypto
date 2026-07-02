@@ -52,6 +52,13 @@ public final class MachineGUIListener implements Listener {
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
+        // ── Track GUI: fully read-only ───────────────────────────────────
+        String title = event.getView().getTitle();
+        if (title.equals("§8[§6K-Crypto Track§8]")) {
+            event.setCancelled(true);
+            return;
+        }
+
         // Identify machine GUI by open-session map (most reliable)
         MachineData data = machineManager.getOpenSession(player.getUniqueId());
         if (data == null) return;

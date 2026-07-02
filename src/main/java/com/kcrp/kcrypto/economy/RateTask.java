@@ -67,7 +67,9 @@ public final class RateTask implements Runnable {
             // ── 2. Anti-inflation rate formula ──────────────────────────────
             //   Rate = 100.0 / (1.0 + C × 0.0018)
             //   C=0    → 100 KCoins  |  C=5000 → 10 KCoins
-            double newRate = EconomyManager.computeRate(totalCirculation, cfg.getRateFloor());
+            double newRate = EconomyManager.computeRate(
+                    totalCirculation, cfg.getBaseRate(),
+                    cfg.getRateDecayConstant(), cfg.getRateFloor());
             economy.setRate(newRate);
 
             // ── 3. Dynamic mining difficulty ─────────────────────────────────

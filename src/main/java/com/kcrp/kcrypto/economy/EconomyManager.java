@@ -16,14 +16,13 @@ import java.util.logging.Level;
  * <pre>
  *   C    = total K-Crypto in circulation (SUM of all wallet balances)
  *
- *   Rate = 100.0 / (1.0 + C × 0.0018)
+ *   Rate = baseRate / (1.0 + C × decayConstant)
  * </pre>
  *
- * <p>Key reference points:
+ * <p>With defaults (baseRate=3.0, decayConstant=0.0004):
  * <ul>
- *   <li>C = 0    → Rate = 100 KCoins per K-Crypto (bootstrap value)</li>
- *   <li>C = 1000 → Rate ≈ 35.7 KCoins per K-Crypto</li>
- *   <li>C = 5000 → Rate = 10  KCoins per K-Crypto (guaranteed krach floor)</li>
+ *   <li>C = 0    → Rate = 3.0 KCoins per K-Crypto</li>
+ *   <li>C = 5000 → Rate = 1.0 KCoin per K-Crypto</li>
  * </ul>
  *
  * <p>The rate is stored in an {@link AtomicReference} so async and
@@ -68,30 +67,24 @@ public final class EconomyManager {
      *
      * <h3>Formula</h3>
      * <pre>
-     *   Rate = 100.0 / (1.0 + C × 0.0018)
+     *   Rate = baseRate / (1.0 + C × decayConstant)
      * </pre>
      *
-     * <p>Calibration:
+     * <p>With defaults (baseRate=3.0, decayConstant=0.0004):
      * <ul>
-     *   <li>C =    0 → Rate = 100.0 (no crypto; maximum value)</li>
-     *   <li>C = 5000 → Rate =  10.0 (krach trigger; automatic floor)</li>
+     *   <li>C =    0 → Rate = 3.0 (100 KCrypto = 300 KCoins at bootstrap)</li>
+     *   <li>C = 5000 → Rate = 1.0 (100 KCrypto = 100 KCoins)</li>
      * </ul>
      *
-     * <p>The constant {@code 0.0018} is derived as follows:
-     * <pre>
-     *   10 = 100 / (1 + 5000 × k)  ⇒  k = (100/10 - 1) / 5000 = 0.0018
-     * </pre>
-     *
      * @param totalCirculation total K-Crypto in circulation (C, must be ≥ 0)
+     * @param baseRate         max rate when C=0 (from config)
+     * @param decayConstant    inflation constant 'k' (from config)
      * @param rateFloor        minimum allowable rate (anti-zero guard)
      * @return new rate in KCoins per K-Crypto
      */
-    public static double computeRate(double totalCirculation, double rateFloor) {
-        // Anti-inflation hyperbolic decay:
-        //   Rate = 100.0 / (1.0 + C × 0.0018)
-        // At C=0    : Rate = 100.0 (bootstrap)
-        // At C=5000 : Rate =  10.0 ("krach automatique")
-        double rate = 100.0 / (1.0 + totalCirculation * 0.0018);
+    public static double computeRate(double totalCirculation, double baseRate,
+                                     double decayConstant, double rateFloor) {
+        double rate = baseRate / (1.0 + totalCirculation * decayConstant);
         return Math.max(rateFloor, rate);
     }
 

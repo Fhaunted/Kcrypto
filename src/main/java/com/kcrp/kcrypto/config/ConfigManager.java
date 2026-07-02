@@ -8,37 +8,56 @@ import org.bukkit.configuration.file.FileConfiguration;
  * Typed, cached wrapper around Bukkit's FileConfiguration.
  * All values are read once and cached for thread-safe access
  * from async scheduler tasks.
+ *
+ * <p>Call {@link #reload()} to re-read the config.yml from disk
+ * and refresh all cached values.</p>
  */
 public final class ConfigManager {
 
     private final KcryptoPlugin plugin;
 
     // Database
-    private final String dbHost;
-    private final int    dbPort;
-    private final String dbName;
-    private final String dbUser;
-    private final String dbPassword;
-    private final String economyTable;
-    private final String economyColumn;
-    private final int    poolSize;
+    private volatile String dbHost;
+    private volatile int    dbPort;
+    private volatile String dbName;
+    private volatile String dbUser;
+    private volatile String dbPassword;
+    private volatile String economyTable;
+    private volatile String economyColumn;
+    private volatile int    poolSize;
 
     // Economy
-    private final double  laundererTaxRate;
-    private final double  rateFloor;
-    private final double  baseRate;
+    private volatile double  laundererTaxRate;
+    private volatile double  rateFloor;
+    private volatile double  baseRate;
+    private volatile double  rateDecayConstant;
 
     // Machine
-    private final long    tickIntervalSeconds;
-    private final long    overloadCooldownSeconds;
+    private volatile long    tickIntervalSeconds;
+    private volatile long    overloadCooldownSeconds;
+    private volatile double  passiveCoolingRate;
 
     // Messages
-    private final String prefix;
-    private final String msgNoPermission;
-    private final String msgLaundererDenied;
+    private volatile String prefix;
+    private volatile String msgNoPermission;
+    private volatile String msgLaundererDenied;
 
     public ConfigManager(KcryptoPlugin plugin) {
         this.plugin = plugin;
+        loadValues();
+    }
+
+    /**
+     * Reloads config.yml from disk and refreshes all cached values.
+     * Safe to call from any thread; Bukkit's reloadConfig() is
+     * synchronised internally.
+     */
+    public void reload() {
+        plugin.reloadConfig();
+        loadValues();
+    }
+
+    private void loadValues() {
         FileConfiguration cfg = plugin.getConfig();
 
         dbHost     = cfg.getString("database.host",     "localhost");
@@ -52,14 +71,16 @@ public final class ConfigManager {
 
         laundererTaxRate       = cfg.getDouble("economy.launderer-tax-rate", 5.0);
         rateFloor              = cfg.getDouble("economy.rate-floor",         0.01);
-        baseRate               = cfg.getDouble("economy.base-rate",          100.0);
+        baseRate               = cfg.getDouble("economy.base-rate",          3.0);
+        rateDecayConstant      = cfg.getDouble("economy.rate-decay-constant", 0.0004);
 
         tickIntervalSeconds     = cfg.getLong("machine.tick-interval-seconds",    30L);
         overloadCooldownSeconds = cfg.getLong("machine.overload-cooldown-seconds", 1800L);
+        passiveCoolingRate      = cfg.getDouble("machine.passive-cooling-rate",   2.0);
 
-        prefix              = color(cfg.getString("messages.prefix",           "&8[&6KKopia&8] &r"));
-        msgNoPermission     = color(cfg.getString("messages.no-permission",    "&cVous n'avez pas la permission."));
-        msgLaundererDenied  = color(cfg.getString("messages.launderer-denied", "&7Cet individu ne souhaite pas vous parler."));
+        prefix              = color(cfg.getString("messages.prefix",           "\u00268[\u00266KKopia\u00268] \u0026r"));
+        msgNoPermission     = color(cfg.getString("messages.no-permission",    "\u0026cVous n'avez pas la permission."));
+        msgLaundererDenied  = color(cfg.getString("messages.launderer-denied", "\u00267Cet individu ne souhaite pas vous parler."));
     }
 
     // ── Database ────────────────────────────────────────────────────────────
@@ -79,11 +100,15 @@ public final class ConfigManager {
     public double getLaundererTaxFraction() { return laundererTaxRate / 100.0; }
     public double getRateFloor()            { return rateFloor; }
     public double getBaseRate()             { return baseRate;  }
+    /** The 'k' constant in the formula: Rate = baseRate / (1 + C × k). */
+    public double getRateDecayConstant()    { return rateDecayConstant; }
 
     // ── Machine ─────────────────────────────────────────────────────────────
 
-    public long getTickIntervalSeconds()     { return tickIntervalSeconds;     }
-    public long getOverloadCooldownSeconds() { return overloadCooldownSeconds; }
+    public long   getTickIntervalSeconds()     { return tickIntervalSeconds;     }
+    public long   getOverloadCooldownSeconds() { return overloadCooldownSeconds; }
+    /** Heat points reduced per tick when the machine has no ores. Default 2.0. */
+    public double getPassiveCoolingRate()       { return passiveCoolingRate;      }
 
     // ── Messages ────────────────────────────────────────────────────────────
 

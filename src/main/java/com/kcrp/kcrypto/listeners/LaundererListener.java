@@ -179,20 +179,18 @@ public final class LaundererListener implements Listener {
             }
 
             plugin.getServer().getAsyncScheduler().runNow(plugin, t -> {
+                double cryptoTax = cryptoAmount * taxRate;
+                double totalCryptoToDeduct = cryptoAmount + cryptoTax;
+                double netKCoins = cryptoAmount * rate;
+
                 double currentBalance = db.getCryptoBalance(playerUuid);
-                if (currentBalance < cryptoAmount) {
+                if (currentBalance < totalCryptoToDeduct) {
                     plugin.getServer().getGlobalRegionScheduler().execute(plugin, () ->
-                            player.sendMessage(cfg.fmt("§cSolde insuffisant.")));
+                            player.sendMessage(cfg.fmt("§cSolde insuffisant pour le montant + la taxe (§e" + String.format("%.2f", totalCryptoToDeduct) + "§c).")));
                     return;
                 }
 
-                double grossPayout = cryptoAmount * rate;
-                // Tax is taken in K-Crypto
-                double cryptoTax = cryptoAmount * taxRate;
-                double netCryptoToConvert = cryptoAmount - cryptoTax;
-                double netKCoins = netCryptoToConvert * rate;
-
-                db.addCryptoBalance(playerUuid, -cryptoAmount);
+                db.addCryptoBalance(playerUuid, -totalCryptoToDeduct);
                 boolean deposited = db.creditKconomy(playerUuid, netKCoins);
 
                 plugin.getServer().getRegionScheduler().execute(plugin, villager.getLocation(), () -> {
@@ -201,7 +199,7 @@ public final class LaundererListener implements Listener {
                     }
                     plugin.getServer().getGlobalRegionScheduler().execute(plugin, () -> {
                         if (deposited) {
-                            player.sendMessage(cfg.fmt("§a✓ Vente réussie: §e" + cryptoAmount + " K-Crypto §a→ §e" + String.format("%.2f", netKCoins) + " KCoins"));
+                            player.sendMessage(cfg.fmt("§a✓ Vente réussie: §e" + cryptoAmount + " K-Crypto §a→ §e" + String.format("%.2f", netKCoins) + " KCoins §8(Taxe: " + String.format("%.2f", cryptoTax) + " K-Crypto)"));
                         } else {
                             player.sendMessage(cfg.fmt("§cErreur de dépôt SQL."));
                         }
@@ -225,17 +223,15 @@ public final class LaundererListener implements Listener {
                 return;
             }
 
-            double kcoinCost = cryptoAmount * rate;
             double cryptoTax = cryptoAmount * taxRate;
-            double totalCryptoCost = cryptoAmount + cryptoTax; // Not used
-            // When buying crypto, you pay KCoins and get Crypto.
-            
+            double totalCryptoToBuy = cryptoAmount + cryptoTax;
+            double kcoinCost = totalCryptoToBuy * rate;
+
             plugin.getServer().getAsyncScheduler().runNow(plugin, t -> {
-                // Here we need to deduct KCoins and add K-Crypto
                 double kcoinBalance = db.getKconomyBalance(playerUuid);
                 if (kcoinBalance < kcoinCost) {
                     plugin.getServer().getGlobalRegionScheduler().execute(plugin, () ->
-                            player.sendMessage(cfg.fmt("§cSolde KCoins insuffisant. Il vous faut §e" + String.format("%.2f", kcoinCost) + " KCoins.")));
+                            player.sendMessage(cfg.fmt("§cSolde KCoins insuffisant. Il vous faut §e" + String.format("%.2f", kcoinCost) + " KCoins §8(montant + taxe).")));
                     return;
                 }
 
@@ -246,15 +242,14 @@ public final class LaundererListener implements Listener {
                     return;
                 }
 
-                double netCryptoReceived = cryptoAmount - cryptoTax;
-                db.addCryptoBalance(playerUuid, netCryptoReceived);
+                db.addCryptoBalance(playerUuid, cryptoAmount);
 
                 plugin.getServer().getRegionScheduler().execute(plugin, villager.getLocation(), () -> {
                     if (villager.isValid()) {
                         launderer.addTaxPool(villager, cryptoTax);
                     }
                     plugin.getServer().getGlobalRegionScheduler().execute(plugin, () -> {
-                        player.sendMessage(cfg.fmt("§a✓ Achat réussi: §e" + String.format("%.2f", kcoinCost) + " KCoins §a→ §e" + String.format("%.2f", netCryptoReceived) + " K-Crypto"));
+                        player.sendMessage(cfg.fmt("§a✓ Achat réussi: §e" + String.format("%.2f", kcoinCost) + " KCoins §a→ §e" + cryptoAmount + " K-Crypto §8(Taxe: " + String.format("%.2f", cryptoTax) + " K-Crypto)"));
                     });
                 });
             });

@@ -292,8 +292,15 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
             case "giveminer"  -> handleAdminGiveMiner(sender, args);
             case "whitelist"  -> handleAdminWhitelist(sender, args, true);
             case "blacklist"  -> handleAdminWhitelist(sender, args, false);
+            case "reload"     -> handleAdminReload(sender);
             default           -> { sendAdminHelp(sender); yield true; }
         };
+    }
+
+    private boolean handleAdminReload(CommandSender sender) {
+        cfg.reload();
+        sender.sendMessage(cfg.fmt("§a✓ Configuration rechargée depuis config.yml."));
+        return true;
     }
 
     private boolean handleAdminRate(CommandSender sender) {
@@ -462,7 +469,7 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
             }
         } else if (args.length == 2 && cmdName.equals("kcrypto") && args[0].equalsIgnoreCase("admin")) {
             if (sender.hasPermission("kcrypto.admin.all")) {
-                completions.addAll(List.of("rate", "refresh", "resetheat", "spawnnpc", "removenpc", "giveminer", "whitelist", "blacklist"));
+                completions.addAll(List.of("rate", "refresh", "resetheat", "spawnnpc", "removenpc", "giveminer", "whitelist", "blacklist", "reload"));
             } else if (sender.hasPermission("kcrypto.owner")) {
                 completions.addAll(List.of("whitelist", "blacklist"));
             }
@@ -506,6 +513,7 @@ public final class KcryptoCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("  §6spawnnpc §7- Invoque un Blanchisseur à votre position");
             sender.sendMessage("  §6removenpc §7- Supprime le Blanchisseur que vous visez");
             sender.sendMessage("  §6giveminer <joueur> §7- Donne un K-Miner au joueur");
+            sender.sendMessage("  §6reload §7- Recharge la configuration");
         }
         if (sender.hasPermission("kcrypto.admin.all") || sender.hasPermission("kcrypto.owner")) {
             sender.sendMessage("  §6whitelist <joueur> §7- Ajoute à la whitelist");
