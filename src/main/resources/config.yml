@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────
+#  KKopia Configuration
+# ─────────────────────────────────────────────
+
+database:
+  host: "localhost"
+  port: 3306
+  name: "kcrp_main"
+  user: "root"
+  password: "password"
+  # Table d'économie de kconomy
+  economy-table: "kconomy_wallets"
+  # Nom de la colonne
+  economy-column: "balance"
+  # Pool size for HikariCP
+  pool-size: 10
+
+economy:
+  # Tax percentage deducted when a player launders K-Crypto (0.0 – 100.0)
+  launderer-tax-rate: 5.0
+  # Minimum possible rate (1 KCrypto → X KCoins). Prevents division quirks.
+  rate-floor: 0.01
+  # Base rate when total circulation is 0 (bootstrap value)
+  base-rate: 100.0
+
+machine:
+  # Seconds between each ore-consumption tick per machine
+  tick-interval-seconds: 30
+  # Seconds the machine stays in overload (cooldown) – default 1800 = 30 min
+  overload-cooldown-seconds: 1800
+
+messages:
+  prefix: "&8[&6KKopia&8] &r"
+  no-permission: "&cVous n'avez pas la permission d'effectuer cette action."
+  launderer-denied: "&7Cet individu ne souhaite pas vous parler."
