@@ -1,39 +1,37 @@
-name: Build Minecraft Plugin
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '8.3.6'
+}
 
-on:
-  push:
-    branches: [ "main", "master", "dev" ]
-  pull_request:
-    branches: [ "main", "master" ]
+group = 'com.kcrp.kcrypto'
+version = '1.0.0'
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+repositories {
+    mavenCentral()
+    maven {
+        url = uri('https://repo.papermc.io/repository/maven-public/')
+    }
+}
 
-    steps:
-      # 1. Récupérer le code source du dépôt
-      - name: Checkout repository
-        uses: actions/checkout@v4
+dependencies {
+    // API Folia adaptée pour la version 1.21.11
+    compileOnly 'dev.folia:folia-api:1.21.11-R0.1-SNAPSHOT'
+}
 
-      # 2. Installer Java (Java 21 recommandé pour les versions récentes de Purpur/Minecraft)
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'gradle'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
 
-  # 3. Installer Gradle officiellement
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
 
-      # 4. Lancer la compilation (Gradle classique)
-      - name: Build with Gradle
-        run: gradle clean build
+tasks.named('shadowJar') {
+    archiveClassifier.set('')
+}
 
-      # 5. Sauvegarder le fichier .jar généré (Artefact GitHub)
-      - name: Upload plugin JAR artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: hyori-plugin-jar
-          path: build/libs/*-all.jar  # Ajuste selon ton nom de jar final (ex: *-unshaded.jar ou nom exact)
+tasks.named('build') {
+    dependsOn shadowJar
+}
