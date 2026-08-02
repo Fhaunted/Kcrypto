@@ -25,13 +25,8 @@ jobs:
 
       - name: Build with Gradle
         run: |
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-            ./gradlew build
-          else
-            echo "Gradle wrapper not found; using installed Gradle instead."
-            gradle build
-          fi
+          chmod +x ./gradlew
+          ./gradlew build --no-daemon
 
       - name: Upload plugin JAR artifact
         if: success()
